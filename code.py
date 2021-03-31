@@ -58,21 +58,20 @@ def load_twitter(filename):
 
 
 # compute the score of given twitter
-def compute_score(word_dict, phrase_dict, twitter_pair):
-    (_id, twitter) = twitter_pair
+def compute_score(word_dict, phrase_dict, text):
     score = 0
 
-    # first check all the phrase (words with two or more words), and if occur, remove it from the twitter
+    # first check all the phrase (words with two or more words), and if occur, remove it from the text
     for k,v in phrase_dict.items():
         # using regex to find all occurance of the phrase
-        phrases = re.findall(r"(?:\s+|^)({}[!,?.'\"]*)(?=\s+|$)".format(k), twitter, re.IGNORECASE)
+        phrases = re.findall(r"(?:\s+|^)({}[!,?.'\"]*)(?=\s+|$)".format(k), text, re.IGNORECASE)
         if phrases:
             score += len(phrases) * v
             # remove the corresponding phrase from the twitter
-            twitter = re.sub(r"(?:\s+|^)({}[!,?.'\"]*)(?=\s+|$)".format(k), "", twitter)
+            text = re.sub(r"(?:\s+|^)({}[!,?.'\"]*)(?=\s+|$)".format(k), "", text)
             
     # clean the unwanted data
-    word_list = [word.rstrip('!,?.\'\"').lower() for word in twitter.split()]
+    word_list = [word.rstrip('!,?.\'\"').lower() for word in text.split()]
 
     for word in word_list:
         score += word_dict[word]
@@ -90,12 +89,12 @@ if __name__ == '__main__':
 
     print(f"There are {len(twitter_list)} twitters")
 
-    score = 0
+    score_dict = defaultdict(int)
 
-    for twitter in twitter_list:
-        score += compute_score(word_dict, phrase_dict, twitter)
+    for _id, text in twitter_list:
+        score_dict[_id] += compute_score(word_dict, phrase_dict, text)
 
-    print(score)
+    print(score_dict)
 
     stop = timeit.default_timer()
     print('Time: ', stop - start)  
