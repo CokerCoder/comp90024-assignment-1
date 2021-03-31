@@ -64,11 +64,11 @@ def compute_score(word_dict, phrase_dict, text):
     # first check all the phrase (words with two or more words), and if occur, remove it from the text
     for k,v in phrase_dict.items():
         # using regex to find all occurance of the phrase
-        phrases = re.findall(r"(?:\s+|^)({}[!,?.'\"]*)(?=\s+|$)".format(k), text, re.IGNORECASE)
+        phrases = re.findall(r"(?:\s+|^)({}[!,?.'\"]*)(?=\s+|$)".format(k), text, flags = re.I)
         if phrases:
             score += len(phrases) * v
             # remove the corresponding phrase from the twitter
-            text = re.sub(r"(?:\s+|^)({}[!,?.'\"]*)(?=\s+|$)".format(k), "", text)
+            text = re.sub(r"(?:\s+|^)({}[!,?.'\"]*)(?=\s+|$)".format(k), "", text, flags = re.I)
             
     # clean the unwanted data
     word_list = [word.rstrip('!,?.\'\"').lower() for word in text.split()]
