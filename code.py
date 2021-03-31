@@ -69,7 +69,7 @@ def compute_score(word_dict, phrase_dict, twitter_pair):
         if phrases:
             score += len(phrases) * v
             # remove the corresponding phrase from the twitter
-            re.sub(r"(?:\s+|^)({}[!,?.'\"]*)(?=\s+|$)".format(k), "", twitter)
+            twitter = re.sub(r"(?:\s+|^)({}[!,?.'\"]*)(?=\s+|$)".format(k), "", twitter)
             
     # clean the unwanted data
     word_list = [word.rstrip('!,?.\'\"').lower() for word in twitter.split()]
