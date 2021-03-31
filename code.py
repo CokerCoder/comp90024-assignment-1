@@ -1,4 +1,8 @@
 import json
+import re
+from collections import defaultdict
+
+import timeit
 
 # Read words in to a dictionary
 def read_words(filename):
@@ -7,7 +11,14 @@ def read_words(filename):
     for line in file.readlines():
         pair = line.strip().split("\t")
         word_dict[pair[0]] = int(pair[1])
-    return word_dict
+    
+    # filter out the phrases with two or more words
+    phrase_dict = defaultdict(int, {k: v for k, v in word_dict.items() if len(k.split())>1})
+
+    # keep the words has only one word
+    word_dict = defaultdict(int, {k : word_dict[k] for k in set(word_dict) - set(phrase_dict)})
+
+    return (word_dict, phrase_dict)
 
 
 # Load melbGrid
@@ -39,16 +50,52 @@ def load_twitter(filename):
 
     for row in twitter_dic['rows']:
         coordinate = row['value']['geometry']['coordinates']
-        id = get_id(coordinate, location_list)
-        if id:
+        _id = get_id(coordinate, location_list)
+        if _id:
             text = row['value']['properties']['text']
-            twitter_list.append((id, text))
+            twitter_list.append((_id, text))
     return twitter_list
 
 
-if __name__ == '__main__':
-    word_dict = read_words('AFINN.txt')
-    location_list = load_grids('melbGrid.json')
-    twitter_list = load_twitter('tinyTwitter.json')
+# compute the score of given twitter
+def compute_score(word_dict, phrase_dict, twitter_pair):
+    (_id, twitter) = twitter_pair
+    score = 0
 
-    print(twitter_list[0])
+    # first check all the phrase (words with two or more words), and if occur, remove it from the twitter
+    for k,v in phrase_dict.items():
+        # using regex to find all occurance of the phrase
+        phrases = re.findall(r"(?:\s+|^)({}[!,?.'\"]*)(?=\s+|$)".format(k), twitter, re.IGNORECASE)
+        if phrases:
+            score += len(phrases) * v
+            # remove the corresponding phrase from the twitter
+            re.sub(r"(?:\s+|^)({}[!,?.'\"]*)(?=\s+|$)".format(k), "", twitter)
+            
+    # clean the unwanted data
+    word_list = [word.rstrip('!,?.\'\"').lower() for word in twitter.split()]
+
+    for word in word_list:
+        score += word_dict[word]
+    
+    return score
+
+
+
+if __name__ == '__main__':
+    start = timeit.default_timer()
+
+    (word_dict, phrase_dict) = read_words('AFINN.txt')
+    location_list = load_grids('melbGrid.json')
+    twitter_list = load_twitter('smallTwitter.json')
+
+    print(f"There are {len(twitter_list)} twitters")
+
+    score = 0
+
+    for twitter in twitter_list:
+        score += compute_score(word_dict, phrase_dict, twitter)
+
+    print(score)
+
+    stop = timeit.default_timer()
+    print('Time: ', stop - start)  
