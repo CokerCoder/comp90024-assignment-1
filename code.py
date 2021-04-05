@@ -46,16 +46,19 @@ def get_id(coordinate, location_list):
 def load_twitter(filename):
     twitter_list = [] # Only store tweets in the specified location
     with open(filename, 'r', encoding = 'utf-8') as f:
-        twitter_dic = json.load(f)
-
-    for row in twitter_dic['rows']:
-        coordinate = row['value']['geometry']['coordinates']
-        _id = get_id(coordinate, location_list)
-        if _id:
-            text = row['value']['properties']['text']
-            twitter_list.append((_id, text))
+        for line in f:
+            try:          
+                dictionary = json.loads(line.strip('\n,'))
+            except:
+                pass  
+            else:
+                coordinate = dictionary['value']['geometry']['coordinates']
+                _id = get_id(coordinate, location_list)
+                if _id:
+                    text = dictionary['value']['properties']['text']
+                    twitter_list.append((_id, text))
+                
     return twitter_list
-
 
 # compute the score of given twitter
 def compute_score(word_dict, phrase_dict, text):
@@ -81,20 +84,24 @@ def compute_score(word_dict, phrase_dict, text):
 
 
 if __name__ == '__main__':
-    start = timeit.default_timer()
+
 
     (word_dict, phrase_dict) = read_words('AFINN.txt')
     location_list = load_grids('melbGrid.json')
+    start1 = timeit.default_timer()
     twitter_list = load_twitter('smallTwitter.json')
-
+    stop1 = timeit.default_timer()
+    
     print(f"There are {len(twitter_list)} twitters")
-
+    
     score_dict = defaultdict(int)
-
+    start2 = timeit.default_timer()
     for _id, text in twitter_list:
         score_dict[_id] += compute_score(word_dict, phrase_dict, text)
-
+    stop2 = timeit.default_timer()
     print(score_dict)
 
-    stop = timeit.default_timer()
-    print('Time: ', stop - start)  
+    
+    print('Loading Time: ', stop1 - start1)   
+    print('Running Time: ', stop2 - start2)  
+    print('Total Time: ', stop2 - start1) 
