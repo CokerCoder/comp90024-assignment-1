@@ -1,7 +1,7 @@
 import json
 import re
 from collections import defaultdict
-
+from mpi4py import MPI
 import timeit
 
 # Read words in to a dictionary
@@ -61,7 +61,7 @@ def load_twitter(filename):
     return twitter_list
 
 # compute the score of given twitter
-def compute_score(word_dict, phrase_dict, text):
+def compute_score(text):
     score = 0
 
     # first check all the phrase (words with two or more words), and if occur, remove it from the text
@@ -84,24 +84,53 @@ def compute_score(word_dict, phrase_dict, text):
 
 
 if __name__ == '__main__':
-
-
+    start0 = timeit.default_timer()
     (word_dict, phrase_dict) = read_words('AFINN.txt')
     location_list = load_grids('melbGrid.json')
-    start1 = timeit.default_timer()
-    twitter_list = load_twitter('smallTwitter.json')
-    stop1 = timeit.default_timer()
     
-    print(f"There are {len(twitter_list)} twitters")
-    
+    comm = MPI.COMM_WORLD
+    size = comm.Get_size()
+    rank = comm.Get_rank()
+    recv_data = None
+    # root core scatter data to all the cores
+    if rank == 0: 
+        # load files
+
+        start1 = timeit.default_timer()
+        twitter_list = load_twitter('smallTwitter.json')
+        stop1 = timeit.default_timer()
+        print('Loading Time: ', stop1 - start1)  
+        print(f"There are {len(twitter_list)} twitters")
+
+        # allocate tweets evenly
+        if len(twitter_list) % size == 0:
+            gap = int(len(twitter_list)/size)      
+        else:
+            gap = int(len(twitter_list)/size) + 1                                                       
+        send_data = [twitter_list[x:x+gap] for x in range(0, len(twitter_list), gap)]                                                        
+        print("process {} scatter {} data to other processes".format(rank, len(send_data)))
+    else:                                                                             
+        send_data = None 
+
+    # all cores recevie one of the data and compute seperatly                                                           
+    recv_data = comm.scatter(send_data, root=0)
     score_dict = defaultdict(int)
     start2 = timeit.default_timer()
-    for _id, text in twitter_list:
-        score_dict[_id] += compute_score(word_dict, phrase_dict, text)
+    for _id, text in recv_data:
+        score_dict[_id] += compute_score(text)
     stop2 = timeit.default_timer()
     print(score_dict)
+    print('Process {} Running Time: {}'.format(rank, stop2 - start2))
 
+    # root core gather all the result dicts and merge them
+    send_data = score_dict
+    gather_data = comm.gather(send_data, root=0)
+    if rank == 0:
+        merge_dict = defaultdict(int)
+        for sub_dict in gather_data:
+            for key, value in sub_dict.items():
+                merge_dict[key] += value
+        print(merge_dict)
+        print('Total Time: ', stop2 - start0) 
+      
     
-    print('Loading Time: ', stop1 - start1)   
-    print('Running Time: ', stop2 - start2)  
-    print('Total Time: ', stop2 - start1) 
