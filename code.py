@@ -93,7 +93,6 @@ if __name__ == '__main__':
     rank = comm.Get_rank()
     
     twitter_list = load_twitter('smallTwitter.json')
-    print(f"There are {len(twitter_list)} twitters")
     start2 = time.time()
     # allocate tweets evenly
     if len(twitter_list) % size == 0:
@@ -105,19 +104,24 @@ if __name__ == '__main__':
     # all cores allocate one of the data and compute seperatly  
                                                            
     score_dict = defaultdict(int)
+    count_dict = defaultdict(int)
     for _id, text in split_data[rank]:
+        count_dict[_id] += 1
         score_dict[_id] += compute_score(text)
-    print(score_dict)
+
 
     # root core gather all the result dicts and merge them
-    send_data = score_dict
+    send_data = (score_dict, count_dict)
     gather_data = comm.gather(send_data, root=0)
     if rank == 0:
-        merge_dict = defaultdict(int)
-        for sub_dict in gather_data:
-            for key, value in sub_dict.items():
-                merge_dict[key] += value
-        print(merge_dict)   
+        merge_count_dict = defaultdict(int)
+        merge_score_dict = defaultdict(int)
+        for (sub_score_dict, sub_count_dict) in gather_data:
+            for key, value in sub_score_dict.items():
+                merge_score_dict[key] += value
+            for key, value in sub_count_dict.items():
+                merge_count_dict[key] += value
+        print(merge_score_dict,merge_count_dict)   
         stop2 = time.time()
         print("computing time ",stop2 - start2)
         print("total time ",stop2 - start3)
