@@ -2,6 +2,7 @@ import json
 import re
 from collections import defaultdict
 from mpi4py import MPI
+import time
 
 # Read words in to a dictionary
 def read_words(filename):
@@ -83,36 +84,28 @@ def compute_score(text):
 
 
 if __name__ == '__main__':
+    start3 = time.time()
     (word_dict, phrase_dict) = read_words('AFINN.txt')
     location_list = load_grids('melbGrid.json')
     
     comm = MPI.COMM_WORLD
     size = comm.Get_size()
     rank = comm.Get_rank()
-    recv_data = None
-    # root core scatter data to all the cores
-    if rank == 0: 
-        # load files 
+    
+    twitter_list = load_twitter('smallTwitter.json')
+    print(f"There are {len(twitter_list)} twitters")
+    start2 = time.time()
+    # allocate tweets evenly
+    if len(twitter_list) % size == 0:
+        gap = int(len(twitter_list)/size)      
+    else:
+        gap = int(len(twitter_list)/size) + 1                                                       
+    split_data = [twitter_list[x:x+gap] for x in range(0, len(twitter_list), gap)]
 
-        twitter_list = load_twitter('bigTwitter.json')
-
-        print(f"There are {len(twitter_list)} twitters")
-
-        # allocate tweets evenly
-        if len(twitter_list) % size == 0:
-            gap = int(len(twitter_list)/size)      
-        else:
-            gap = int(len(twitter_list)/size) + 1                                                       
-        send_data = [twitter_list[x:x+gap] for x in range(0, len(twitter_list), gap)]
-
-        print("process {} scatter {} data to other processes".format(rank, len(send_data)))
-    else:                                                                             
-        send_data = None 
-
-    # all cores recevie one of the data and compute seperatly                                                           
-    recv_data = comm.scatter(send_data, root=0)
+    # all cores allocate one of the data and compute seperatly  
+                                                           
     score_dict = defaultdict(int)
-    for _id, text in recv_data:
+    for _id, text in split_data[rank]:
         score_dict[_id] += compute_score(text)
     print(score_dict)
 
@@ -122,5 +115,9 @@ if __name__ == '__main__':
     if rank == 0:
         merge_dict = defaultdict(int)
         for sub_dict in gather_data:
-            merge_dict.update(sub_dict)
-        print(merge_dict)
+            for key, value in sub_dict.items():
+                merge_dict[key] += value
+        print(merge_dict)   
+        stop2 = time.time()
+        print("computing time ",stop2 - start2)
+        print("total time ",stop2 - start3)
