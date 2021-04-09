@@ -60,6 +60,7 @@ def load_twitter(filename):
                 
     return twitter_list
 
+
 # compute the score of given twitter
 def compute_score(text):
     score = 0
@@ -82,37 +83,59 @@ def compute_score(text):
     return score
 
 
+def print_result(count_dict, score_dict):
+    print("Cell\t#Total Tweets\t#Overall Sentiment Score")
+    for k in sorted(count_dict.keys()):
+        score_str = f"{score_dict[k]:,d}"
+        if score_dict[k] > 0:
+            score_str = '+'+score_str
+        elif score_dict[k] < 0:
+            score_str = '-'+score_str
+        print(f"{k:<4s}\t{count_dict[k]:^13,d}\t{score_str:^24s}")
+
 
 if __name__ == '__main__':
-    start3 = time.time()
-    (word_dict, phrase_dict) = read_words('AFINN.txt')
-    location_list = load_grids('melbGrid.json')
-    
+
+    # parallel computing
     comm = MPI.COMM_WORLD
     size = comm.Get_size()
     rank = comm.Get_rank()
-    
-    twitter_list = load_twitter('smallTwitter.json')
-    start2 = time.time()
+
+    file_name = 'bigTwitter.json'
+
+    t0 = time.time()
+    # all cores load the information
+    (word_dict, phrase_dict) = read_words('AFINN.txt')
+    location_list = load_grids('melbGrid.json')
+    twitter_list = load_twitter(file_name)
+
+
     # allocate tweets evenly
     if len(twitter_list) % size == 0:
         gap = int(len(twitter_list)/size)      
     else:
         gap = int(len(twitter_list)/size) + 1                                                       
     split_data = [twitter_list[x:x+gap] for x in range(0, len(twitter_list), gap)]
+    t1 = time.time()
 
-    # all cores allocate one of the data and compute seperatly  
-                                                           
+    print(f"Process {rank} loading time: {t1-t0}")
+
+
+    # all cores allocate one of the data and compute seperatly                                                 
     score_dict = defaultdict(int)
     count_dict = defaultdict(int)
     for _id, text in split_data[rank]:
         count_dict[_id] += 1
         score_dict[_id] += compute_score(text)
+    t2 = time.time()
+
+    print(f"Process {rank} computing time: {t2-t1}")
 
 
     # root core gather all the result dicts and merge them
     send_data = (score_dict, count_dict)
     gather_data = comm.gather(send_data, root=0)
+    
     if rank == 0:
         merge_count_dict = defaultdict(int)
         merge_score_dict = defaultdict(int)
@@ -121,7 +144,10 @@ if __name__ == '__main__':
                 merge_score_dict[key] += value
             for key, value in sub_count_dict.items():
                 merge_count_dict[key] += value
-        print(merge_score_dict,merge_count_dict)   
-        stop2 = time.time()
-        print("computing time ",stop2 - start2)
-        print("total time ",stop2 - start3)
+        t3 = time.time()
+
+        print(f"Merging time: {t3-t2}")
+        print(f"Total time: {t3-t0}\n")
+
+        
+        print_result(merge_score_dict, merge_count_dict)
